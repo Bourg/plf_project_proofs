@@ -119,16 +119,21 @@ Lemma free_in_context : forall x e t Gamma,
    appears_free_in x e ->
    Gamma |- e \in t ->
    exists t', Gamma x = Some t'.
-Proof.
+Proof with auto.
   intros x e t Gamma Hfree Hte.
   generalize dependent t. generalize dependent Gamma.
   induction Hfree; try (intros Gamma t Ht;
-    inversion Ht; subst; clear Ht; eauto).
-  
-  intros Gamma t2 Ht. inversion Ht; subst; clear Ht.
+    inversion Ht; subst; clear Ht; solve [eauto]).
+
+  - intros Gamma t2 Ht. inversion Ht; subst; clear Ht.
     apply IHHfree in H5. rewrite update_neq in H5.
      + assumption.
      + rewrite symmetry_neq. assumption.
+
+  - intros Gamma t2 Ht. inversion Ht; subst; clear Ht.
+    apply IHHfree in H11.
+    rewrite update_neq in H11...
+    rewrite update_neq in H11...
 Qed.
 
 Lemma typable_empty_closed : forall e t,
