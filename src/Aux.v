@@ -1,4 +1,4 @@
-Require Import PFPL.Maps.
+Require Import Maps.
 Require Import Coq.Logic.FunctionalExtensionality.
 
 Lemma symmetry_neq : forall {T : Type} (P Q : T), P <> Q <-> Q <> P.

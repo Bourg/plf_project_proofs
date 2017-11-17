@@ -1,5 +1,5 @@
 COQC_COMMAND=coqc
-MODULE_NAME=PFPL
+MODULE_NAME=""
 FLAGS=-Q . $(MODULE_NAME)
 
 COQC=$(COQC_COMMAND) $(FLAGS)
@@ -10,11 +10,11 @@ clean:
 	rm -f *.vo
 	rm -f *.glob
 
-SystemT.vo: Aux.vo Maps.vo
+SystemT.vo: SystemT.v Aux.vo Maps.vo
 	$(COQC) SystemT.v
 
-Aux.vo: Maps.vo
+Aux.vo: Aux.v Maps.vo
 	$(COQC) Aux.v
 
-Maps.vo:
+Maps.vo: Maps.v
 	$(COQC) Maps.v

@@ -1,5 +1,5 @@
-Require Import PFPL.Maps.
-Require Import PFPL.Aux.
+Require Import Maps.
+Require Import Aux.
 
 Require Import Coq.Bool.Bool.
 
