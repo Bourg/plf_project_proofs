@@ -1,25 +1,15 @@
-Load Maps.
+Require Import PFPL.Maps.
+Require Import PFPL.Aux.
 
-Lemma symmetry_neq : forall {T : Type} (P Q : T), P <> Q <-> Q <> P.
-Proof.
-  intros P Q. split; intros Hneq Heq; subst; apply Hneq; reflexivity.
-Qed.
+Require Import Coq.Bool.Bool.
 
-
-Lemma update_split_shadow: forall T (Gamma : partial_map T) x y a b c,
-        update (update (update Gamma x a) y b) x c =
-        update (update Gamma y b) x c.
-Proof with auto.
-  intros T Gamma x y a b c.
-  apply functional_extensionality. intros z.
-  unfold update. unfold t_update.
-  destruct (beq_idP x z); subst...
-Qed.
+(*****************************************************************************
+ * DATATYPE DEFINITIONS AND OPERATIONS                                       *
+ *****************************************************************************)
 
 Inductive ty : Type :=
   | TNat : ty
   | TArrow : ty -> ty -> ty.
-Hint Constructors ty.
 
 Inductive exp : Type :=
   | Var : id -> exp
@@ -28,35 +18,28 @@ Inductive exp : Type :=
   | Rec : exp -> id -> id -> exp -> exp -> exp
   | Abs : id -> ty -> exp -> exp
   | App : exp -> exp -> exp.
-Hint Constructors exp.
 
 Definition env : Type := partial_map ty.
 
-Inductive appears_free_in : id -> exp -> Prop :=
-  | Afi_Var : forall x, appears_free_in x (Var x)
-  | Afi_S : forall x e, appears_free_in x e -> appears_free_in x (S e)
-  | Afi_App1 : forall x e1 e2,
-      appears_free_in x e1 -> appears_free_in x (App e1 e2)
-  | Afi_App2 : forall x e1 e2,
-      appears_free_in x e2 -> appears_free_in x (App e1 e2)
-  | Afi_Abs : forall x y t e,
-      x <> y -> appears_free_in x e ->
-      appears_free_in x (Abs y t e)
-  | Afi_Rec : forall x y z e0 e1 e,
-      appears_free_in z e -> appears_free_in z (Rec e0 x y e1 e)
-  | Afi_RecZ : forall z e0 x y e1 e,
-      appears_free_in z e0 -> appears_free_in z (Rec e0 x y e1 e)
-  | Afi_RecS : forall z e0 x y e1 e,
-      x <> z -> y <> z -> appears_free_in z e1 ->
-      appears_free_in z (Rec e0 x y e1 e).
-Hint Constructors appears_free_in.
+Fixpoint subst (z : id) (e' : exp) (e : exp) : exp :=
+  let do_subst := subst z e' in
+  match e with
+  | Var x as v => if beq_id x z then e' else v
+  | Z => Z
+  | S n => S (do_subst n)
+  | Rec e0 x y e1 e =>
+      let e1' := if beq_id x z || beq_id y z then e1 else do_subst e1 in
+      Rec (do_subst e0) x y e1' (do_subst e)
+  | Abs x t e as abs => if beq_id x z then abs else Abs x t (do_subst e)
+  | App e1 e2 => App (do_subst e1) (do_subst e2)
+  end.
+Notation "'[' x ':=' e1 ']' e" := (subst x e1 e) (at level 70).
 
-Definition closed (e : exp) :=
-  forall x, ~ appears_free_in x e.
-
+(*****************************************************************************
+ * STATICS SPECIFICATION                                                     *
+ *****************************************************************************)
 
 Reserved Notation "Gamma |- e \in T" (at level 80).
-
 Inductive has_type : env -> exp -> ty -> Prop :=
   | T_Var : forall Gamma x T,
               Gamma x = Some T -> Gamma |- Var x \in T
@@ -75,27 +58,36 @@ Inductive has_type : env -> exp -> ty -> Prop :=
               (update (update Gamma y t) x TNat) |- e1 \in t ->
               Gamma |- (Rec e0 x y e1 e) \in t
 where "Gamma |- e \in T" := (has_type Gamma e T).
-Hint Constructors has_type.
 
 Inductive value : exp -> Prop :=
   | Val_Z : value Z
   | Val_S : forall n, value n -> value (S n)
   | Val_Abs : forall x t e, value (Abs x t e).
-Hint Constructors value.
 
-Fixpoint subst (z : id) (e' : exp) (e : exp) : exp :=
-  let do_subst := subst z e' in
-  match e with
-  | Var x as v => if beq_id x z then e' else v
-  | Z => Z
-  | S n => S (do_subst n)
-  | Rec e0 x y e1 e =>
-      let e1' := if beq_id x z || beq_id y z then e1 else do_subst e1 in
-      Rec (do_subst e0) x y e1' (do_subst e)
-  | Abs x t e as abs => if beq_id x z then abs else Abs x t (do_subst e)
-  | App e1 e2 => App (do_subst e1) (do_subst e2)
-  end.
-Notation "'[' x ':=' e1 ']' e" := (subst x e1 e) (at level 70).
+Inductive appears_free_in : id -> exp -> Prop :=
+  | Afi_Var : forall x, appears_free_in x (Var x)
+  | Afi_S : forall x e, appears_free_in x e -> appears_free_in x (S e)
+  | Afi_App1 : forall x e1 e2,
+      appears_free_in x e1 -> appears_free_in x (App e1 e2)
+  | Afi_App2 : forall x e1 e2,
+      appears_free_in x e2 -> appears_free_in x (App e1 e2)
+  | Afi_Abs : forall x y t e,
+      x <> y -> appears_free_in x e ->
+      appears_free_in x (Abs y t e)
+  | Afi_Rec : forall x y z e0 e1 e,
+      appears_free_in z e -> appears_free_in z (Rec e0 x y e1 e)
+  | Afi_RecZ : forall z e0 x y e1 e,
+      appears_free_in z e0 -> appears_free_in z (Rec e0 x y e1 e)
+  | Afi_RecS : forall z e0 x y e1 e,
+      x <> z -> y <> z -> appears_free_in z e1 ->
+      appears_free_in z (Rec e0 x y e1 e).
+
+Definition closed (e : exp) :=
+  forall x, ~ appears_free_in x e.
+
+(*****************************************************************************
+ * DYNAMICS SPECIFICATION                                                    *
+ *****************************************************************************)
 
 Reserved Notation "e ==> e'" (at level 75).
 Inductive step : exp -> exp -> Prop :=
@@ -113,7 +105,14 @@ Inductive step : exp -> exp -> Prop :=
       value (S e) -> Rec e0 x y e1 (S e) ==>
                     [x := e][y := (Rec e0 x y e1 e)] e1
 where "e ==> e'" := (step e e').
-Hint Constructors step.
+
+(*****************************************************************************)
+Hint Constructors ty exp has_type value appears_free_in step.
+(*****************************************************************************)
+
+(*****************************************************************************
+ * STATIC LEMMAS                                                             *
+ *****************************************************************************)
 
 Lemma free_in_context : forall x e t Gamma,
    appears_free_in x e ->
@@ -169,31 +168,6 @@ Proof with eauto.
     apply Hfree. apply Afi_RecS...
 Qed.
 
-Lemma canonical_nat : forall Gamma e,
-  value e -> Gamma |- e \in TNat ->
-  e = Z \/ exists e', e = (S e').
-Proof.
-  intros Gamma e Hv HNat.
-  inversion Hv; subst; clear Hv.
-  - left. reflexivity.
-  - right. exists n. reflexivity.
-  - inversion HNat.
-Qed.
-
-Lemma canonical_arrow : forall Gamma t1 t2 e,
-  value e -> Gamma |- e \in TArrow t1 t2 ->
-  exists x e2, e = Abs x t1 e2.
-Proof.
-  intros Gamma t1 t2 e Hv Harrow.
-  remember (TArrow t1 t2).
-  inversion Hv; subst; clear Hv.
-  - inversion Harrow.
-  - inversion Harrow.
-  - exists x. exists e0.
-    inversion Harrow; subst; clear Harrow.
-    reflexivity.
-Qed.
-
 Lemma substitution_preserves_typing : forall Gamma e e' t t' x,
   update Gamma x t |- e' \in t' -> empty |- e \in t ->
   Gamma |- [x := e] e' \in t'.
@@ -230,6 +204,56 @@ Proof with eauto.
     + subst. apply T_Abs. rewrite update_shadow in H5...
     + apply T_Abs. apply IHe'. rewrite update_permute...
 Qed.
+
+(*****************************************************************************
+ * DYNAMIC LEMMAS                                                            *
+ *****************************************************************************)
+
+(*****************************************************************************
+ * EXERCISE SOLUTIONS                                                        *
+ *****************************************************************************)
+
+(* Exercise 9.1 - Prove Lemma 9.2 *)
+Lemma canonical_nat : forall Gamma e,
+  value e -> Gamma |- e \in TNat ->
+  e = Z \/ exists e', e = (S e').
+Proof.
+  intros Gamma e Hv HNat.
+  inversion Hv; subst; clear Hv.
+  - left. reflexivity.
+  - right. exists n. reflexivity.
+  - inversion HNat.
+Qed.
+
+Lemma canonical_arrow : forall Gamma t1 t2 e,
+  value e -> Gamma |- e \in TArrow t1 t2 ->
+  exists x e2, e = Abs x t1 e2.
+Proof.
+  intros Gamma t1 t2 e Hv Harrow.
+  remember (TArrow t1 t2).
+  inversion Hv; subst; clear Hv.
+  - inversion Harrow.
+  - inversion Harrow.
+  - exists x. exists e0.
+    inversion Harrow; subst; clear Harrow.
+    reflexivity.
+Qed.
+
+Lemma canonical_forms :
+  forall Gamma e, value e ->
+              (Gamma |- e \in TNat -> (e = Z \/ exists e', e = S e')) \/
+              (forall t1 t2, Gamma |- e \in TArrow t1 t2 ->
+                             exists x e2, e = Abs x t1 e2).
+Proof with eauto.
+  intros Gamma e Hve.
+
+  inversion Hve; subst; clear Hve.
+  - left. apply canonical_nat...
+  - left. apply canonical_nat...
+  - right. intros t1 t2. eapply canonical_arrow...
+Qed.
+
+(*****************************************************************************)
 
 Lemma preservation : forall e e' t,
   empty |- e \in t -> e ==> e' -> empty |- e' \in t.
