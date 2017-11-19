@@ -64,6 +64,10 @@ Inductive value : exp -> Prop :=
   | Val_S : forall n, value n -> value (S n)
   | Val_Abs : forall x t e, value (Abs x t e).
 
+Inductive nat_value : exp -> Prop :=
+  | NatVal_Z : nat_value Z
+  | NatVal_S : forall n, nat_value n -> nat_value (S n).
+
 Inductive appears_free_in : id -> exp -> Prop :=
   | Afi_Var : forall x, appears_free_in x (Var x)
   | Afi_S : forall x e, appears_free_in x e -> appears_free_in x (S e)
@@ -106,8 +110,14 @@ Inductive step : exp -> exp -> Prop :=
                     [x := e][y := (Rec e0 x y e1 e)] e1
 where "e ==> e'" := (step e e').
 
+Reserved Notation "e ==>* e'" (at level 75).
+Inductive multistep : exp -> exp -> Prop :=
+  | Multi_Refl : forall e, e ==>* e
+  | Multi_Step : forall e e' e'', e ==> e' -> e' ==>* e'' -> e ==>* e''
+where "e ==>* e'" := (multistep e e').
+
 (*****************************************************************************)
-Hint Constructors ty exp has_type value appears_free_in step.
+Hint Constructors ty exp has_type value nat_value appears_free_in step multistep.
 (*****************************************************************************)
 
 (*****************************************************************************
@@ -254,6 +264,7 @@ Proof with eauto.
 Qed.
 
 (*****************************************************************************)
+(* Exercise 9.2 - Prove Lemma 9.3 *)
 
 Lemma preservation : forall e e' t,
   empty |- e \in t -> e ==> e' -> empty |- e' \in t.
@@ -279,6 +290,99 @@ Proof with eauto.
         inversion Ht1...
     + inversion Ht1...
 Qed.
+
+(*****************************************************************************)
+(* Exercise 9.3 - Prove Normalization to Nat *)
+
+Lemma multi_succ : forall e n, e ==>* n -> S e ==>* S n.
+Proof.
+  intros e n Hstep. induction Hstep.
+  - apply Multi_Refl.
+  - eapply Multi_Step with (e':=S e').
+    + apply S_Succ. assumption.
+    + assumption.
+Qed.
+
+Lemma multi_app : forall e1 e2 e1' e2',
+  e1 ==>* e1' -> e2 ==>* e2' -> value e1' -> App e1 e2 ==>* App e1' e2'.
+Proof with eauto.
+  intros e1 e2 e1' e2' Hstep1 Hstep2 Hval.
+  induction Hstep1.
+  - induction Hstep2.
+    + apply Multi_Refl.
+    + eapply Multi_Step...
+  - eapply Multi_Step...
+Qed.
+
+Lemma normalizing_nat :
+  forall e, empty |- e \in TNat -> exists n, nat_value n /\ e ==>* n.
+Proof with eauto.
+  intros e Hte. remember empty. remember TNat.
+  induction Hte; subst...
+  - inversion H.
+  - destruct IHHte... destruct H. clear Heqt.
+    exists (S x). split... apply multi_succ. assumption.
+  - inversion Heqt.
+  - give_up.
+Abort.
+(* The proof breaks down due to the inability of the inductive hypothesis
+   to handle function application. Despite clearing the base cases with a
+   maximally general inductive hypothesis, the inductive hypothesis only
+   encompasses values that type to Nat, but application may be on functions
+   from ANYTHING to Nat. *)
+
+(*****************************************************************************)
+(* Exercise 9.4 - Prove Normalization of Well-Typed Terms *)
+
+Lemma multi_preservation :
+  forall e e' t, empty |- e \in t -> e ==>* e' -> empty |- e' \in t.
+Proof with eauto.
+  intros e e' t Hte Hstep. induction Hstep...
+  apply IHHstep. eapply preservation...
+Qed.
+
+Lemma multi_trans : forall e e' e'',
+  e ==>* e' -> e' ==>* e'' -> e ==>* e''.
+Proof with eauto.
+  intros e e' e'' Hstep1 Hstep2.
+  induction Hstep1...
+Qed.
+
+Theorem strong_normalization : forall e t,
+  empty |- e \in t -> exists e', value e' /\ e ==>* e'.
+Proof with eauto.
+  intros e t Hte. remember empty. induction Hte; subst.
+  - inversion H.
+  - exists Z...
+  - destruct IHHte... exists (S x). destruct H. split.
+    + apply Val_S...
+    + apply multi_succ...
+  - eexists...
+  - destruct IHHte1... destruct IHHte2...
+    destruct H. destruct H0.
+    rename t2 into t1. rename t into t2. rename x into v2. rename x0 into v1.
+    assert (Htv2:=Hte1).
+    eapply multi_preservation in Htv2...
+    apply canonical_arrow in Htv2...
+    destruct Htv2 as (x & e_body & Heq). subst.
+
+    rename v1 into v2. eexists. split.
+
+    + admit.
+    + apply multi_trans with (e':=App (Abs x t1 e_body) v2).
+      * apply multi_app...
+      * eapply Multi_Step.
+        -- apply S_AppAbs...
+        -- give_up. (* PROBLEM *)
+  - admit.
+  Unshelve. assumption.
+Abort.
+
+(* The problem arises after substitution occurs in the application case.
+   There is nothing in the hypotheses that speaks to the ability of the
+   body to reduce to a value (as needed to satisfy the prior admitted case. *)
+
+
 
 
 
