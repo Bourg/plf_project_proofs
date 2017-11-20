@@ -1,5 +1,6 @@
 Require Import Maps.
 Require Import Aux.
+Require Import Coq.Logic.FunctionalExtensionality.
 
 Require Import Coq.Bool.Bool.
 
@@ -89,6 +90,7 @@ Inductive appears_free_in : id -> exp -> Prop :=
 Definition closed (e : exp) :=
   forall x, ~ appears_free_in x e.
 
+
 (*****************************************************************************
  * DYNAMICS SPECIFICATION                                                    *
  *****************************************************************************)
@@ -177,6 +179,24 @@ Proof with eauto.
     rewrite beq_id_false_iff in Heqy.
     apply Hfree. apply Afi_RecS...
 Qed.
+
+Lemma closed_typable_empty :
+  forall Gamma e t, Gamma |- e \in t -> closed e ->
+                    empty |- e \in t.
+Proof with eauto.
+  intros Gamma e t Hte Hclosed.
+  unfold closed in Hclosed. unfold not in Hclosed.
+  generalize dependent Gamma. generalize dependent t.
+  induction e; try intros t Gamma Ht.
+  - exfalso. eapply Hclosed...
+  - eapply weakening. eassumption.
+    intros x Hafi. apply Hclosed in Hafi. inversion Hafi.
+  - eapply weakening. eassumption.
+    intros x Hafi. apply Hclosed in Hafi. inversion Hafi.
+  - rename e1 into e0. rename i into x. rename i0 into y.
+    rename e2 into e1. rename e3 into e.
+    inversion Ht; subst; clear Ht. apply T_Rec...
+Admitted.
 
 Lemma substitution_preserves_typing : forall Gamma e e' t t' x,
   update Gamma x t |- e' \in t' -> empty |- e \in t ->
@@ -348,19 +368,42 @@ Proof with eauto.
   induction Hstep1...
 Qed.
 
-Theorem strong_normalization : forall e t,
-  empty |- e \in t -> exists e', value e' /\ e ==>* e'.
+Lemma closed_succ : forall e, closed (S e) -> closed e.
 Proof with eauto.
-  intros e t Hte. remember empty. induction Hte; subst.
-  - inversion H.
+  intros e Hcse. unfold closed in Hcse. unfold not in Hcse.
+  induction e; intros x Hfree...
+Qed.
+
+Lemma closed_app : forall e1 e2, closed (App e1 e2) -> closed e1 /\ closed e2.
+Proof with eauto.
+  intros e1 e2 Hcse. unfold closed in Hcse. unfold not in Hcse.
+  split.
+  - induction e1; intros x Hfree...
+  - induction e2; intros x Hfree...
+Qed.
+
+Theorem strong_normalization : forall Gamma e t,
+  Gamma |- e \in t -> closed e -> exists e', value e' /\ e ==>* e'.
+Proof with eauto.
+  intros Gamma e t Hte Hclosed.
+  remember Gamma as GammaR.
+  induction Hte; subst.
+  - exfalso. unfold closed in Hclosed. unfold not in Hclosed. eapply Hclosed...
   - exists Z...
-  - destruct IHHte... exists (S x). destruct H. split.
-    + apply Val_S...
-    + apply multi_succ...
+  - destruct IHHte...
+    + apply closed_succ...
+    + exists (S x). destruct H. split.
+      * apply Val_S...
+      * apply multi_succ...
   - eexists...
-  - destruct IHHte1... destruct IHHte2...
+  - apply closed_app in Hclosed. destruct Hclosed as [Hcl_e1 Hcl_e2].
+    destruct IHHte1; destruct IHHte2...
     destruct H. destruct H0.
     rename t2 into t1. rename t into t2. rename x into v2. rename x0 into v1.
+
+    apply closed_typable_empty in Hte1...
+    apply closed_typable_empty in Hte2...
+
     assert (Htv2:=Hte1).
     eapply multi_preservation in Htv2...
     apply canonical_arrow in Htv2...
