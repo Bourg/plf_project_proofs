@@ -382,11 +382,10 @@ Proof with eauto.
   - induction e2; intros x Hfree...
 Qed.
 
-Theorem strong_normalization : forall Gamma e t,
+Theorem termination : forall Gamma e t,
   Gamma |- e \in t -> closed e -> exists e', value e' /\ e ==>* e'.
 Proof with eauto.
   intros Gamma e t Hte Hclosed.
-  remember Gamma as GammaR.
   induction Hte; subst.
   - exfalso. unfold closed in Hclosed. unfold not in Hclosed. eapply Hclosed...
   - exists Z...
@@ -425,9 +424,25 @@ Abort.
    There is nothing in the hypotheses that speaks to the ability of the
    body to reduce to a value (as needed to satisfy the prior admitted case. *)
 
+(*****************************************************************************)
+(* Hereditary Termination *)
+(*
 
+Definition terminating_nat e :=
+  exists e', e ==>* e' /\ nat_value e'.
 
+Inductive hereditarily_terminating : exp -> ty -> Prop :=
+  | HT_Nat : forall e, terminating_nat e ->
+             hereditarily_terminating e TNat
+  | HT_Arrow : forall e t1 t2,
+                   (forall e1, hereditarily_terminating e1 t1 ->
+                   hereditarily_terminating (App e e1) t2) ->
+                   hereditarily_terminating e (TArrow t1 t2).
 
+Lemma hereditary_termination :
+  forall e t, empty |- e \in t -> hereditarily_terminating e t.
+Proof with eauto.
+  intros e t. generalize dependent e. induction t.
+  - intros e Ht. apply HT_Nat... unfold terminating_nat. intros _.
 
-
-
+*)
